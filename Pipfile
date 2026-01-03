@@ -8,6 +8,7 @@ django-phonenumber-field = {extras = ["phonenumbers"], version = "*"}
 djangorestframework-simplejwt = "*"
 psycopg2-binary = "*"
 django-filter = "*"
+drf-yasg = "*"
 
 [dev-packages]
 
