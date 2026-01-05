@@ -9,6 +9,7 @@ djangorestframework-simplejwt = "*"
 psycopg2-binary = "*"
 django-filter = "*"
 drf-yasg = "*"
+django = "*"
 
 [dev-packages]
 
