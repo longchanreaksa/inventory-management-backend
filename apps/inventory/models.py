@@ -45,6 +45,11 @@ class Product(models.Model):
             models.Index(fields=['sku']),
             models.Index(fields=['name']),
         ]
+        permissions = [
+            ("adjust_stock", "Can adjust product stock"),
+            ("view_cost_price", "Can view product cost price"),
+            ("discontinue_product", "Can discontinue product"),
+        ]
 
     def __str__(self):
         return f"{self.name} ({self.sku})"
@@ -78,6 +83,11 @@ class StockTransaction(models.Model):
 
     class Meta:
         ordering = ('-timestamp',)
+        permissions = [
+            ("create_stock_transaction", "Can create stock transaction"),
+            ("approve_stock_transaction", "Can approve stock transaction"),
+            ("view_stock_history", "Can view stock transaction history"),
+        ]
 
     def __str__(self):
         return f"{self.get_transaction_type_display()} - {self.product.name} ({self.quantity})"
@@ -112,5 +122,12 @@ class LowStockAlert(models.Model):
     message = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        permissions = [
+            ("view_low_stock_alert", "Can view low stock alerts"),
+            ("resolve_low_stock_alert", "Can resolve low stock alerts"),
+        ]
+
     def __str__(self):
         return f"Alert: {self.product.name} - {self.message}"
+

@@ -1,7 +1,7 @@
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models, transaction
-from rest_framework.utils import timezone
+from django.utils import timezone
 
 from apps.inventory.models import Product, LowStockAlert
 from apps.suppliers.models import Supplier
@@ -39,6 +39,13 @@ class PurchaseOrder(BaseOrder):
     supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, related_name='purchase_orders')
     expected_date = models.DateField(null=True, blank=True)
 
+    class Meta:
+        permissions = [
+            ("confirm_purchase_order", "Can confirm purchase orders"),
+            ("receive_purchase_order", "Can receive purchase orders"),
+            ("cancel_purchase_order", "Can cancel purchase orders"),
+        ]
+
     def receive(self):
         if self.status != 'confirmed':
             raise ValidationError("Only confirmed purchase orders can be received.")
@@ -70,7 +77,8 @@ class PurchaseOrderItem(models.Model):
         null=True,  # ✅ allows existing rows to stay empty
         blank=True
     )
-    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True)  # ✅ add this
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True,
+                                   blank=True)  # ✅ add this
     quantity = models.PositiveIntegerField(validators=[MinValueValidator(1)])
     unit_price = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(0)])
     notes = models.TextField(blank=True)
@@ -87,7 +95,6 @@ class PurchaseOrderItem(models.Model):
         return f"{self.product.name} x {self.quantity}"
 
 
-
 class SaleOrder(BaseOrder):
     customer = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -97,6 +104,14 @@ class SaleOrder(BaseOrder):
     )
     order_date = models.DateField(auto_now_add=True)
     shipped_date = models.DateField(null=True, blank=True)
+
+    class Meta:
+        permissions = [
+            ("confirm_sale_order", "Can confirm sales orders"),
+            ("ship_sale_order", "Can ship sales orders"),
+            ("invoice_sale_order", "Can invoice sales orders"),
+            ("cancel_sale_order", "Can cancel sales orders"),
+        ]
 
     def ship(self):
         if self.status != 'confirmed':
@@ -111,14 +126,12 @@ class SaleOrder(BaseOrder):
                 product.quantity -= item.quantity
                 product.save()
 
-                # ✅ Create LowStockAlert if below threshold
                 if product.quantity <= product.reorder_level:
-                    LowStockAlert.objects.create(product=product, threshold=product.reorder_level)
+                    LowStockAlert.objects.create(product=product)
 
             self.status = 'shipped'
-            self.shipped_date = timezone.now()  # ✅ set shipped_date
+            self.shipped_date = timezone.now()
             self.save()
-
 
     def update_status_from_items(self):
         statuses = set(self.items.values_list('line_status', flat=True))
@@ -144,6 +157,7 @@ class SaleOrderItem(models.Model):
 
     def __str__(self):
         return f"{self.product.name} x {self.quantity}"
+
 
 class OrderStatusHistory(models.Model):
     order_type = models.CharField(max_length=20)  # "purchase" or "sales"

@@ -9,7 +9,8 @@ from .serializers import (
     StockSummarySerializer,
     StockHistorySerializer, LowStockAlertSerializer
 )
-
+from rest_framework.permissions import IsAuthenticated
+from apps.inventory.permissions import ProductPermission, StockTransactionPermission, LowStockAlertPermission
 
 class SearchFilterOrderingMixin:
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -18,7 +19,7 @@ class SearchFilterOrderingMixin:
 class CategoryListCreateView(SearchFilterOrderingMixin, generics.ListCreateAPIView):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
-    permission_classes = (IsStaffOrReadOnly,)
+    permission_classes = [IsStaffOrReadOnly]
 
     filterset_fields = ['name']
     search_fields = ['name', 'description']
@@ -29,13 +30,12 @@ class CategoryListCreateView(SearchFilterOrderingMixin, generics.ListCreateAPIVi
 class CategoryDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
-    permission_classes = (permissions.IsAuthenticatedOrReadOnly,)
+    permission_classes = [IsStaffOrReadOnly]
 
 
 class ProductListCreateView(SearchFilterOrderingMixin, generics.ListCreateAPIView):
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
-    permission_classes = (IsStaffOrReadOnly,)
 
     filterset_fields = ['category', 'status']
     search_fields = ['name', 'sku', 'category__name']
@@ -46,7 +46,6 @@ class ProductListCreateView(SearchFilterOrderingMixin, generics.ListCreateAPIVie
 class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
-    permission_classes = (permissions.IsAuthenticatedOrReadOnly,)
 
 
 class StockTransactionListCreateView(SearchFilterOrderingMixin, generics.ListCreateAPIView):

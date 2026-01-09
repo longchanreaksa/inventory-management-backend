@@ -10,6 +10,11 @@ psycopg2-binary = "*"
 django-filter = "*"
 drf-yasg = "*"
 django = "*"
+django-celery-beat = "*"
+django-environ = "*"
+requests = "*"
+twilio = "*"
+flower = "*"
 
 [dev-packages]
 

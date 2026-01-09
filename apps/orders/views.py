@@ -3,8 +3,13 @@ from rest_framework import viewsets, serializers, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
+from rest_framework.views import APIView
 from apps.orders.models import SaleOrder, PurchaseOrder, OrderStatusHistory
 from apps.orders.serializers import PurchaseOrderSerializer, SalesOrderSerializer
+from apps.orders.tasks import process_sales_order_shipping, process_purchase_order_receiving
+from rest_framework.permissions import IsAuthenticated
+from apps.orders.permissions import SaleOrderPermission, PurchaseOrderPermission
+
 
 def log_status_change(order, old_status, new_status, user):
     from apps.orders.models import OrderStatusHistory
@@ -16,9 +21,11 @@ def log_status_change(order, old_status, new_status, user):
         changed_by=user
     )
 
+
 class PurchaseOrderViewSet(viewsets.ModelViewSet):
     queryset = PurchaseOrder.objects.all().select_related('supplier', 'warehouse')
     serializer_class = PurchaseOrderSerializer
+    permission_classes = [IsAuthenticated, PurchaseOrderPermission]
 
     @action(detail=True, methods=['post'])
     @transaction.atomic
@@ -33,19 +40,27 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
         return Response({"detail": "Confirmed order"}, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['post'])
-    @transaction.atomic
     def receive(self, request, pk=None):
         order = self.get_object()
-        try:
-            order.receive()
-            return Response({"detail": "Purchase order received and stock updated."})
-        except Exception as e:
-            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        if order.status != "confirmed":
+            return Response(
+                {"detail": "Only confirmed orders can be received"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        process_purchase_order_receiving.delay(order.id, request.user.id)
+
+        return Response(
+            {"detail": "Purchase order receiving started"},
+            status=status.HTTP_202_ACCEPTED
+        )
 
 
 class SalesOrderViewSet(viewsets.ModelViewSet):
     queryset = SaleOrder.objects.all().select_related('customer', 'warehouse')
     serializer_class = SalesOrderSerializer
+    permission_classes = [IsAuthenticated, SaleOrderPermission]
 
     @action(detail=True, methods=['post'])
     @transaction.atomic
@@ -59,16 +74,21 @@ class SalesOrderViewSet(viewsets.ModelViewSet):
         return Response({"detail": "Sales order confirmed."})
 
     @action(detail=True, methods=['post'])
-    @transaction.atomic
     def ship(self, request, pk=None):
         order = self.get_object()
-        try:
-            old_status = order.status
-            order.ship()
-            log_status_change(order, old_status, order.status, request.user)
-            return Response({"detail": "Sales order shipped and stock deducted."})
-        except Exception as e:
-            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        if order.status != "confirmed":
+            return Response(
+                {"detail": "Only confirmed orders can be shipped"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        process_sales_order_shipping.delay(order.id, request.user.id)
+
+        return Response(
+            {"detail": "Shipping started"},
+            status=status.HTTP_202_ACCEPTED
+        )
 
     @action(detail=True, methods=['post'])
     @transaction.atomic
@@ -102,6 +122,3 @@ class SalesOrderViewSet(viewsets.ModelViewSet):
                         f"(needed {item.quantity}, available {product.quantity})"
                     )
         return super().update(request, *args, **kwargs)
-
-
-
